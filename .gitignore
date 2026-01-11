@@ -1,0 +1,8 @@
+# Ignore frameworks, system and environment folders
+__pycache__/
+.venv/
+cache/
+
+# Ignore datasets
+*.parquet
+*.csv
