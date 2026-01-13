@@ -14,12 +14,8 @@ df = pd.read_parquet(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimi
                      columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'trip_distance', 'RatecodeID', 'congestion_surcharge',
                               'PULocationID', 'DOLocationID'])
 
-unikalne_pul = df['PULocationID'].nunique()
-unikalne_dol = df['DOLocationID'].nunique()
-print(unikalne_pul)
-print(unikalne_dol)
 
-print(f'Długość df1: {len(df)}')
+
 df['user_id'] = np.arange(len(df))
 df.set_index('user_id', inplace=True)
 df.sort_index(inplace=True)
@@ -34,14 +30,13 @@ df['time_diffrence'] =  df['tpep_dropoff_datetime'] - df['tpep_pickup_datetime']
 df_dist = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\id_lookup.csv')
 df_dist_OSM = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\OSM_Street_lookup.csv', delimiter=';')
 
-print(f'Długość df2: {len(df)}')
+
 # Merging tables on location id
 df = pd.merge(df, df_dist, left_on='PULocationID', right_on='LocationID')
 df = pd.merge(df, df_dist, left_on='DOLocationID', right_on='LocationID')
 df = pd.merge(df, df_dist_OSM, left_on='Zone_x', right_on='NTA')
 df = pd.merge(df, df_dist_OSM, left_on='Zone_y', right_on='NTA')
 
-print(f'Długość df3: {len(df)}')
 
 # Filtering important columns
 df = df[['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'time_diffrence','trip_distance [km]', 'RatecodeID', 'congestion_surcharge',
@@ -71,19 +66,19 @@ df['tpep_pickup_datetime'].round('1h')
 df_weather = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\weather-data.csv')
 df_weather['Time'] = pd.to_datetime(df_weather['Time']).astype('datetime64[us]')
 
-df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right_on='Time', how='left')
 
-#df_time_weather = pd.merge(df_time_for_api, df_weather, left_on='tpep_pickup_datetime', right_on='Time')
-#df_time_weather = df_time_weather.drop(columns=['Time'])
-#df_time_weather['user_id'] = np.arange(len(df_time_weather))
-#df_time_weather.set_index('user_id', inplace=True)
+df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right_on='Time')
 
-#df_time_weather.sort_index(inplace=True)
 
-print(len(df))
-print(len(df_time_weather))
-#print(len(df_time_weather))
-#df_weather_clean = df_weather.drop(columns=['tpep_pickup_datetime'])
+'''
+print(f'DataFrame df_time_weather: {df_time_weather.columns}')
+print(f'DataFrame df kolumny: {df.columns}') '''
+
+
+df_time_weather = df_time_weather[['Time', 'Temperature', 'Snowfall',
+       'Showers', 'Rain', 'Visibility', 'Precipitation', 'Wind_speed_10m']]
+
+    
 df = df.join(df_time_weather, lsuffix='_taxi', rsuffix='_weather')
-
-print(df.columns)
+df = df.drop(columns=['Time'])
+print(df.iloc[0])
