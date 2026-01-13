@@ -56,17 +56,14 @@ df = df.rename(columns={'time_diffrence': 'time_diffrence [h]'})
 # Average speed 
 df['average_speed [km/h]'] = round(df['trip_distance [km]'] / df['time_diffrence [h]'],2)
 
-#print(df[['average_speed [V]', 'trip_distance [km]', 'time_diffrence [h]']].head())
-
+# Rounding pickup time to 1 hour for api weather data
 df['tpep_pickup_datetime'].round('1h')
-# Changing time for 1h frequency
-#df_time_for_api = df['tpep_pickup_datetime'].copy()
-#df_time_for_api = df_time_for_api.dt.round('1h')
 
+# Reading weather csv & changing datatype to datetime64[us]
 df_weather = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\weather-data.csv')
 df_weather['Time'] = pd.to_datetime(df_weather['Time']).astype('datetime64[us]')
 
-
+# Merging df (taxi data) and df_weather (weather data)
 df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right_on='Time')
 
 
@@ -74,11 +71,12 @@ df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right
 print(f'DataFrame df_time_weather: {df_time_weather.columns}')
 print(f'DataFrame df kolumny: {df.columns}') '''
 
-
+# Dropping useless columns
 df_time_weather = df_time_weather[['Time', 'Temperature', 'Snowfall',
        'Showers', 'Rain', 'Visibility', 'Precipitation', 'Wind_speed_10m']]
 
-    
+# Final df table
 df = df.join(df_time_weather, lsuffix='_taxi', rsuffix='_weather')
 df = df.drop(columns=['Time'])
-print(df.iloc[0])
+
+df.to_csv('dataset-merged.csv', index=False)
