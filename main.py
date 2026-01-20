@@ -2,6 +2,7 @@
 import pandas as pd
 import osmnx as ox
 import numpy as np
+from sklearn.model_selection import train_test_split
 
 # Functions
 #from weather_api import download_weather_api
@@ -75,8 +76,25 @@ print(f'DataFrame df kolumny: {df.columns}') '''
 df_time_weather = df_time_weather[['Time', 'Temperature', 'Snowfall',
        'Showers', 'Rain', 'Visibility', 'Precipitation', 'Wind_speed_10m']]
 
-# Final df table
+# Final changes in df
 df = df.join(df_time_weather, lsuffix='_taxi', rsuffix='_weather')
 df = df.drop(columns=['Time'])
+df = df.sample(frac=1).reset_index(drop=True)
 
-df.to_csv('dataset-merged.csv', index=False)
+# Changing datatypes to 'category' and numbers for XGBoost
+# Category
+cat_cols = ['PULZone', 'PULBorough', 'DOLZone', 'DOLBorough']
+for i in cat_cols:
+    df[i] = df[i].astype('category')
+
+# Numbers
+df['pickup_hour'] = pd.to_datetime(df['tpep_pickup_datetime']).dt.hour
+df['dropoff_hour'] = pd.to_datetime(df['tpep_dropoff_datetime']).dt.hour
+df = df.drop(columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime'])
+
+# Checking data types
+print(df.dtypes)
+
+# Saving final dataset to csv
+df.to_parquet('dataset-marged.parquet')
+
