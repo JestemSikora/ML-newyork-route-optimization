@@ -22,10 +22,11 @@ df.set_index('user_id', inplace=True)
 df.sort_index(inplace=True)
 
 # Renaming to know units
-df = df.rename(columns={'trip_distance': 'trip_distance [km]'})
+df = df.rename(columns={'trip_distance': 'trip_distance km'})
 
 # Feature engineering
 df['time_diffrence'] =  df['tpep_dropoff_datetime'] - df['tpep_pickup_datetime'] 
+
 
 # Second table containing names of all places
 df_dist = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\id_lookup.csv')
@@ -33,68 +34,86 @@ df_dist_OSM = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-o
 
 
 # Merging tables on location id
-df = pd.merge(df, df_dist, left_on='PULocationID', right_on='LocationID')
-df = pd.merge(df, df_dist, left_on='DOLocationID', right_on='LocationID')
-df = pd.merge(df, df_dist_OSM, left_on='Zone_x', right_on='NTA')
-df = pd.merge(df, df_dist_OSM, left_on='Zone_y', right_on='NTA')
+df = pd.merge(df, df_dist, left_on='PULocationID', right_on='LocationID', how='left')
+df = pd.merge(df, df_dist, left_on='DOLocationID', right_on='LocationID', how='left')
+#df = pd.merge(df, df_dist_OSM, left_on='Zone_x', right_on='NTA')
+#df = pd.merge(df, df_dist_OSM, left_on='Zone_y', right_on='NTA')
 
 
 # Filtering important columns
-df = df[['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'time_diffrence','trip_distance [km]', 'RatecodeID', 'congestion_surcharge',
-                'PULocationID', 'OpenStreetMap_x', 'Borough_x', 'DOLocationID', 'OpenStreetMap_y', 'Borough_y']]
+df = df[['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'time_diffrence','trip_distance km', 'RatecodeID', 'congestion_surcharge',
+                'PULocationID', 'Borough_x', 'DOLocationID', 'Borough_y']]
 
 # Renaming for better convenience
-df = df.rename(columns={'OpenStreetMap_x': 'PULZone'})
+#df = df.rename(columns={'OpenStreetMap_x': 'PULZone'})
 df = df.rename(columns={'Borough_x': 'PULBorough'})
-df = df.rename(columns={'OpenStreetMap_y': 'DOLZone'})
+#df = df.rename(columns={'OpenStreetMap_y': 'DOLZone'})
 df = df.rename(columns={'Borough_y': 'DOLBorough'})
 
 
 # Changing timedelta64[us] output to Hours
 df['time_diffrence'] = df['time_diffrence'].dt.total_seconds() / 3600
-df = df.rename(columns={'time_diffrence': 'time_diffrence [h]'})
+df = df.rename(columns={'time_diffrence': 'time_diffrence h'})
 
 # Average speed 
-df['average_speed [km/h]'] = round(df['trip_distance [km]'] / df['time_diffrence [h]'],2)
+df['average_speed km/h'] = round(df['trip_distance km'] / df['time_diffrence h'],2)
+df['average_speed km/h'] = df['average_speed km/h'].replace(0, np.nan)
+df['average_speed km/h'] = df['average_speed km/h'].replace([np.inf, -np.inf], np.nan)
+
+
+# Checking if there's NaN or inf in time_diffrence [km/h] - we can not divide by 0
+NaN_speed = df[df['average_speed km/h'].isna()]
+#print(len(NaN_speed[NaN_speed['time_diffrence h'] == 0]))
+
+num_df = df[['average_speed km/h', 'trip_distance km', 'time_diffrence h']]
+
+
+#print(df.isna().sum())
 
 # Rounding pickup time to 1 hour for api weather data
-df['tpep_pickup_datetime'].round('1h')
+df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.round('h')
 
 # Reading weather csv & changing datatype to datetime64[us]
 df_weather = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\weather-data.csv')
 df_weather['Time'] = pd.to_datetime(df_weather['Time']).astype('datetime64[us]')
 
 # Merging df (taxi data) and df_weather (weather data)
-df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right_on='Time')
-
+#df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right_on='Time')
 
 '''
 print(f'DataFrame df_time_weather: {df_time_weather.columns}')
 print(f'DataFrame df kolumny: {df.columns}') '''
 
 # Dropping useless columns
-df_time_weather = df_time_weather[['Time', 'Temperature', 'Snowfall',
-       'Showers', 'Rain', 'Visibility', 'Precipitation', 'Wind_speed_10m']]
+#df_time_weather = df_time_weather[['Time', 'Temperature', 'Snowfall',
+      #'Showers', 'Rain', 'Visibility', 'Precipitation', 'Wind_speed_10m']]
 
-# Final changes in df
+# Setting index to join two datasets
+df = df.set_index('tpep_pickup_datetime', drop=False)
+df_time_weather = df_weather.set_index('Time', drop=False)
+
+# Marching to one dataset
 df = df.join(df_time_weather, lsuffix='_taxi', rsuffix='_weather')
-df = df.drop(columns=['Time'])
 df = df.sample(frac=1).reset_index(drop=True)
+df = df.drop(columns=['Visibility'])
+
+# Clear all NaN
+df = df.dropna()
 
 # Changing datatypes to 'category' and numbers for XGBoost
 # Category
-cat_cols = ['PULZone', 'PULBorough', 'DOLZone', 'DOLBorough']
+cat_cols = ['PULBorough','DOLBorough']
 for i in cat_cols:
     df[i] = df[i].astype('category')
 
 # Numbers
 df['pickup_hour'] = pd.to_datetime(df['tpep_pickup_datetime']).dt.hour
 df['dropoff_hour'] = pd.to_datetime(df['tpep_dropoff_datetime']).dt.hour
-df = df.drop(columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime'])
+df = df.drop(columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'Time'])
+
 
 # Checking data types
 print(df.dtypes)
 
 # Saving final dataset to csv
 df.to_parquet('dataset-marged.parquet')
-
