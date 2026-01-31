@@ -9,8 +9,8 @@ df = pd.read_parquet(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimi
 
 
 # Train & Test variables
-Y = df['time_diffrence [h]']
-X = df.drop(columns=['time_diffrence [h]'])
+Y = df['time_diffrence h']
+X = df.drop(columns=['time_diffrence h'])
 X_train, X_test, Y_train, Y_test = train_test_split(X, Y, train_size=0.8, random_state=123)
 
 
@@ -23,10 +23,38 @@ params = {'objective': 'reg:squarederror',
           'learning_rate': 0.01,
           'max_depth': 3,
           'tree_method': 'hist',
-          'min_child_weight': 8}
+          'min_child_weight': 8
+          }
+
+# Training model
+nb = 500
+evals_result = {}
+watchlist = [(xgb_test, "test"), (xgb_train, "train")]
+model = xgb.train(params=params, dtrain=xgb_train, num_boost_round=nb, evals=watchlist,
+                  verbose_eval=50, early_stopping_rounds=100, evals_result=evals_result)
 
 # Watching performence for validation
-watchlist = [(xgb_test, "test"), (xgb_train, "train")]
-model = xgb.train(params=params, dtrain=xgb_train, num_boost_round=500, evals=watchlist)
+
+#metric_name = list(evals_result['test'].keys())[0]  
+metric_name = 'rmse'
+
+train_score = evals_result['train'][metric_name][-1]
+test_score = evals_result['test'][metric_name][-1]
+
+# Logs
+log_data = {
+    "best_iteration": model.best_iteration,
+    "best_score": model.best_score,
+    "train_score": round(train_score, 4),
+    "test_score": round(test_score, 4),
+    "features": ", ".join(X.columns.tolist()),
+    "params": str(params)
+}
+
+# Saving best last result to *.txt
+with open('model_summary.txt', 'a', encoding='utf-8') as txt_file:
+    for key, value in log_data.items():
+        txt_file.write(f"{key}: {value}\n")
+
 
 y_pred = model.predict(xgb_test)
