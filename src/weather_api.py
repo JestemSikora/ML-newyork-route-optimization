@@ -58,7 +58,7 @@ def download_weather_api(miasto, data_iso, data_end, lat, lon):
 download = download_weather_api("New York", "2025-01-01", "2025-01-31", lat, lon)
 df = pd.DataFrame(download)
 
-df.to_csv('weather-data.csv', index=False)
+#df.to_csv('weather-data.csv', index=False)
 
 print(df)
 

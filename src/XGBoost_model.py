@@ -31,9 +31,9 @@ nb = 500
 evals_result = {}
 watchlist = [(xgb_test, "test"), (xgb_train, "train")]
 model = xgb.train(params=params, dtrain=xgb_train, num_boost_round=nb, evals=watchlist,
-                  verbose_eval=50, early_stopping_rounds=100, evals_result=evals_result)
+                  verbose_eval=100, early_stopping_rounds=50, evals_result=evals_result)
 
-# Watching performence for validation
+# Watching performance for evaluating
 
 #metric_name = list(evals_result['test'].keys())[0]  
 metric_name = 'rmse'
@@ -41,7 +41,7 @@ metric_name = 'rmse'
 train_score = evals_result['train'][metric_name][-1]
 test_score = evals_result['test'][metric_name][-1]
 
-# Logs
+# Best last result
 log_data = {
     "best_iteration": model.best_iteration,
     "best_score": model.best_score,
@@ -51,10 +51,16 @@ log_data = {
     "params": str(params)
 }
 
-# Saving best last result to *.txt
+# Saving to *.txt
 with open('model_summary.txt', 'a', encoding='utf-8') as txt_file:
     for key, value in log_data.items():
         txt_file.write(f"{key}: {value}\n")
 
+print(f"Średnia z czasu przejazdu {Y_train.mean()}")
+print(f"Odcyhelnie standardowe: {Y_train.std()}")
 
 y_pred = model.predict(xgb_test)
+
+
+# Error Analysis - why mean is 0.25, rmse 0.26-0.28 and std 0.48
+error =abs(Y_test - y_pred)
