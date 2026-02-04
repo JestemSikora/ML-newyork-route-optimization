@@ -11,9 +11,10 @@ city = 'New York'
 
 # History data
 # Picking right coulmns for our problem
-df = pd.read_parquet(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\yellow_tripdata_2025-01.parquet',
+df = pd.read_parquet(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\yellow_tripdata_2025-01.parquet',
                      columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'trip_distance', 'RatecodeID', 'congestion_surcharge',
-                              'PULocationID', 'DOLocationID'])
+                              'PULocationID', 'DOLocationID', 'fare_amount', 'extra',
+                                'tolls_amount', 'Airport_fee', 'cbd_congestion_fee'])
 
 
 
@@ -29,8 +30,8 @@ df['time_diffrence'] =  df['tpep_dropoff_datetime'] - df['tpep_pickup_datetime']
 
 
 # Second table containing names of all places
-df_dist = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\id_lookup.csv')
-df_dist_OSM = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\OSM_Street_lookup.csv', delimiter=';')
+df_dist = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\id_lookup.csv')
+df_dist_OSM = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\OSM_Street_lookup.csv', delimiter=';')
 
 
 # Merging tables on location id
@@ -74,7 +75,7 @@ num_df = df[['average_speed km/h', 'trip_distance km', 'time_diffrence h']]
 df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.round('h')
 
 # Reading weather csv & changing datatype to datetime64[us]
-df_weather = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\weather-data.csv')
+df_weather = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\weather-data.csv')
 df_weather['Time'] = pd.to_datetime(df_weather['Time']).astype('datetime64[us]')
 
 # Merging df (taxi data) and df_weather (weather data)
@@ -106,10 +107,11 @@ cat_cols = ['PULBorough','DOLBorough']
 for i in cat_cols:
     df[i] = df[i].astype('category')
 
-# Numbers
+# Changing dtypes to int and dropping columns
 df['pickup_hour'] = pd.to_datetime(df['tpep_pickup_datetime']).dt.hour
 df['dropoff_hour'] = pd.to_datetime(df['tpep_dropoff_datetime']).dt.hour
-df = df.drop(columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'Time'])
+df = df.drop(columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'Time',
+                      'PUL'])
 
 
 # Checking data types
