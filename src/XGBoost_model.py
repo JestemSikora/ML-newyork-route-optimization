@@ -4,6 +4,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import xgboost as xgb
 from pathlib import Path
+from sklearn.metrics import r2_score
 
 
 def XGBoost_model(xgb_train, xgb_test, X):
@@ -11,47 +12,75 @@ def XGBoost_model(xgb_train, xgb_test, X):
     Training and testing model on defined parameters.
     '''
 
-    # Specifying params for our trees
+    # Specify params for xgboost trees
     params = {'objective': 'reg:squarederror',
             'learning_rate': 0.02,
             'max_depth': 4,
             'tree_method': 'hist',
-            'min_child_weight': 8
+            'min_child_weight': 8,
+            'eval_metric': ['rmse', 'mae']
             }
 
-    # Training model
+    # Train model
     nb = 700
     evals_result = {}
     watchlist = [(xgb_test, "test"), (xgb_train, "train")]
     model = xgb.train(params=params, dtrain=xgb_train, num_boost_round=nb, evals=watchlist,
                     verbose_eval=100, early_stopping_rounds=50, evals_result=evals_result)
 
+    y_pred_test = model.predict(xgb_test)
+
     model.save_model('road_model.ubjson')
-    # Watching performance for evaluating
 
-    #metric_name = list(evals_result['test'].keys())[0]  
-    metric_name = 'rmse'
+    ### Watch performance for evaluating  ###
 
-    train_score = evals_result['train'][metric_name][-1]
-    test_score = evals_result['test'][metric_name][-1]
+    # Variables for RMSE
+    train_rmse = evals_result['train']['rmse'][-1]
+    test_rmse = evals_result['test']['rmse'][-1]
+
+    train_rmse_list = evals_result['train']['rmse'][::50]
+    test_rmse_list = evals_result['test']['rmse'][::50]
+
+    # Variables for MAE
+    train_mae = evals_result['train']['mae'][-1]
+    test_mae = evals_result['test']['mae'][-1]
+
+    train_mae_list = evals_result['train']['mae'][::50]
+    test_mae_list = evals_result['test']['mae'][::50]
+
+    # Variables for R^2
+    y_test_true = xgb_test.get_label()
+    test_r2 = r2_score(y_test_true, y_pred_test)
+
+    # Largest residuals
+    residuals = round(y_test_true - y_pred_test, 4)
+    residuals_test = residuals.to_frame(name='residuals in h')
+    largest_residuals = residuals_test.nlargest(800, 'residuals in h')
 
     # Best last result
     log_data = {
         "best_iteration": model.best_iteration,
         "best_score": model.best_score,
-        "train_score": round(train_score, 4),
-        "test_score": round(test_score, 4),
+        "train_rmse": round(train_rmse, 4),
+        "test_rmse": round(test_rmse, 4),
+        "train_rmse_list": train_rmse_list,
+        "test_rmse_list": test_rmse_list,
+        "train_mae": round(train_mae, 4),
+        "test_mae": round(test_mae, 4),
+        "train_mae_list": train_mae_list,
+        "test_mae_list": test_mae_list,
+        "test_r2": round(test_r2, 4),
         "features": ", ".join(X.columns.tolist()),
         "params": str(params)
     }
 
-    # Saving to *.txt
+    # Save to *.txt
     with open('model_summary.txt', 'a', encoding='utf-8') as txt_file:
         for key, value in log_data.items():
             txt_file.write(f"{key}: {value}\n")
+        txt_file.write('-'*30)
 
-    y_pred_test = model.predict(xgb_test)
-
+    
     return model, y_pred_test
 
 def data_prepare(df):
