@@ -5,9 +5,11 @@ from sklearn.model_selection import train_test_split
 import xgboost as xgb
 from pathlib import Path
 from sklearn.metrics import r2_score
+import json
+import os
 
 
-def XGBoost_model(xgb_train, xgb_test, X):
+def XGBoost_model(xgb_train, xgb_test, X, Y_test):
     '''
     Training and testing model on defined parameters.
     '''
@@ -53,25 +55,45 @@ def XGBoost_model(xgb_train, xgb_test, X):
     test_r2 = r2_score(y_test_true, y_pred_test)
 
     # Largest residuals
-    residuals = round(y_test_true - y_pred_test, 4)
-    residuals_test = residuals.to_frame(name='residuals in h')
+    residuals_series = pd.Series(
+        np.round(Y_test.values - y_pred_test, 4), 
+        index=Y_test.index, 
+        name='residuals in h'
+    )
+    
+    # To DataFrame
+    residuals_test = residuals_series.to_frame()
+    
+    # Top 800 largest residuals
     largest_residuals = residuals_test.nlargest(800, 'residuals in h')
 
-    # Best last result
+    # Save to csv for later analysis
+    largest_residuals.to_csv('top_800_errors.csv')
+
+    # How many total rounds
+    total_rounds = len(evals_result['train']['rmse'])
+
+    # Step every 50 rounds
+    steps = list(range(0, total_rounds, 50))
+
+    if (total_rounds - 1) not in steps:
+        steps.append(total_rounds - 1)
+
+    # Log data for later analysis
     log_data = {
         "best_iteration": model.best_iteration,
+        "features": ", ".join(X.columns.tolist()),
+        "params": str(params),
         "best_score": model.best_score,
         "train_rmse": round(train_rmse, 4),
         "test_rmse": round(test_rmse, 4),
-        "train_rmse_list": train_rmse_list,
-        "test_rmse_list": test_rmse_list,
+        "train_rmse_history": {step: round(evals_result['train']['rmse'][step], 6) for step in steps},
+        "test_rmse_history": {step: round(evals_result['test']['rmse'][step], 6) for step in steps},
         "train_mae": round(train_mae, 4),
         "test_mae": round(test_mae, 4),
-        "train_mae_list": train_mae_list,
-        "test_mae_list": test_mae_list,
-        "test_r2": round(test_r2, 4),
-        "features": ", ".join(X.columns.tolist()),
-        "params": str(params)
+        "train_mae_history": {step: round(evals_result['train']['mae'][step], 6) for step in steps},
+        "test_mae_history": {step: round(evals_result['test']['mae'][step], 6) for step in steps},
+        "test_r2": round(test_r2, 4)
     }
 
     # Save to *.txt
@@ -79,6 +101,25 @@ def XGBoost_model(xgb_train, xgb_test, X):
         for key, value in log_data.items():
             txt_file.write(f"{key}: {value}\n")
         txt_file.write('-'*30)
+
+
+    # Save to *.json
+    json_file = 'model_summary.json'
+
+    # Checks if file already exisists - if it is true, adds new data
+    if os.path.exists(json_file):
+        with open(json_file, 'r', encoding='utf-8') as f:
+            try:
+                all_results = json.load(f)
+            except json.JSONDecodeError:
+                all_results = [] # protection against an empty file
+    else:
+        all_results = [] # if there's no file make a new list
+
+    all_results.append(log_data)
+
+    with open(json_file, 'w', encoding='utf-8') as f:
+        json.dump(all_results, f, indent=4)
 
     
     return model, y_pred_test
@@ -102,14 +143,14 @@ def data_prepare(df):
     xgb_test = xgb.DMatrix(X_test, Y_test, enable_categorical=True)
 
     
-    return xgb_train, xgb_test, X
+    return xgb_train, xgb_test, X, Y_test
 
 def model_pipeline(df):
     '''
     Main orchestrator of data prepare, trainning and test process.
     '''
-    xgb_train, xgb_test, X = data_prepare(df)
-    model, predictions = XGBoost_model(xgb_train, xgb_test, X)
+    xgb_train, xgb_test, X , Y_test = data_prepare(df)
+    model, predictions = XGBoost_model(xgb_train, xgb_test, X, Y_test)
 
     return model, predictions
 
@@ -119,7 +160,7 @@ def main_process():
     Executes whole model training script.
     '''
 
-    dataset_path = Path(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\preprocessed-dataset')
+    dataset_path = Path(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\test-preprocessed-dataset')
 
     if not dataset_path.exists():
         print('Error! Path does not exist.')
