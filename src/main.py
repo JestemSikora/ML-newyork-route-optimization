@@ -3,6 +3,13 @@ import sys
 from pathlib import Path
 
 
+def create_folder(folder_name):
+
+    path = Path(folder_name)
+    
+    path.mkdir(parents=True, exist_ok=True)
+    
+    print(f"{folder_name}' was created.")
 
 def run_pipeline():
     '''
@@ -16,6 +23,8 @@ def run_pipeline():
     if not folder_path.exists():
         print('Error! No folder path.')
         return
+    
+    create_folder("eval_0")
     
     known_files = set()
     if history_file.exists():
