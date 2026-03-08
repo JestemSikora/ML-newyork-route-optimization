@@ -1,121 +1,49 @@
-# Frameworks that we're going to use
-import pandas as pd
-import osmnx as ox
-import numpy as np
-from sklearn.model_selection import train_test_split
-
-# Functions
-#from weather_api import download_weather_api
-
-city = 'New York'
-
-# History data
-# Picking right coulmns for our problem
-df = pd.read_parquet(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\yellow_tripdata_2025-01.parquet',
-                     columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'trip_distance', 'RatecodeID', 'congestion_surcharge',
-                              'PULocationID', 'DOLocationID', 'fare_amount', 'extra',
-                                'tolls_amount', 'Airport_fee', 'cbd_congestion_fee'])
+import subprocess
+import sys
+from pathlib import Path
 
 
 
-df['user_id'] = np.arange(len(df))
-df.set_index('user_id', inplace=True)
-df.sort_index(inplace=True)
+def run_pipeline():
+    '''
+    Pipeline of the data preperation, ML training and then evaluation by generating important metric graphs.
+    '''
+    # Data preparation (check if there's new file)
+    # If there is - start data preparation script with this new file
+    folder_path = Path(r"C:\Users\wikto\OneDrive\Dokumenty\all-datasets\taxi_routes_datasets_23-25")
+    history_file = Path("processed_files.txt")
 
-# Renaming to know units
-df = df.rename(columns={'trip_distance': 'trip_distance km'})
+    if not folder_path.exists():
+        print('Error! No folder path.')
+        return
+    
+    known_files = set()
+    if history_file.exists():
+        known_files = set(history_file.read_text().splitlines())
 
-# Feature engineering
-df['time_diffrence'] =  df['tpep_dropoff_datetime'] - df['tpep_pickup_datetime'] 
+    # Checks what's new
+    current_files = {f.name for f in folder_path.iterdir() if f.is_file()}
+    new_files = current_files - known_files
 
+    if new_files:
+            print(f"Founded {len(new_files)} new files. Starting data_prep.py...")
+            try:
+                subprocess.run([sys.executable, "data_prep.py"], check=True)
+            except subprocess.CalledProcessError:
+                print("Error accured in data_prep.py... Stopping pipeline")
+                return
 
-# Second table containing names of all places
-df_dist = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\id_lookup.csv')
-df_dist_OSM = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\OSM_Street_lookup.csv', delimiter=';')
+    # Train
+    try:
+        subprocess.run([sys.executable, "XGBoost_model.py"], check=True)
+    except subprocess.CalledProcessError:
+         print('Error accured in XGBoost_model.py... Stopping pipeline')
 
+    # Generate PDF
+    try:
+        subprocess.run([sys.executable, "evaluation.py"], check=True)
+    except subprocess.CalledProcessError:
+         print('Error accured in evaluation.py... Stopping pipeline')
 
-# Merging tables on location id
-df = pd.merge(df, df_dist, left_on='PULocationID', right_on='LocationID', how='left')
-df = pd.merge(df, df_dist, left_on='DOLocationID', right_on='LocationID', how='left')
-#df = pd.merge(df, df_dist_OSM, left_on='Zone_x', right_on='NTA')
-#df = pd.merge(df, df_dist_OSM, left_on='Zone_y', right_on='NTA')
-
-
-# Filtering important columns
-df = df[['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'time_diffrence','trip_distance km', 'RatecodeID', 'congestion_surcharge',
-                'PULocationID', 'Borough_x', 'DOLocationID', 'Borough_y']]
-
-# Renaming for better convenience
-#df = df.rename(columns={'OpenStreetMap_x': 'PULZone'})
-df = df.rename(columns={'Borough_x': 'PULBorough'})
-#df = df.rename(columns={'OpenStreetMap_y': 'DOLZone'})
-df = df.rename(columns={'Borough_y': 'DOLBorough'})
-
-
-# Changing timedelta64[us] output to Hours
-df['time_diffrence'] = df['time_diffrence'].dt.total_seconds() / 3600
-df = df.rename(columns={'time_diffrence': 'time_diffrence h'})
-
-# Average speed 
-df['average_speed km/h'] = round(df['trip_distance km'] / df['time_diffrence h'],2)
-df['average_speed km/h'] = df['average_speed km/h'].replace(0, np.nan)
-df['average_speed km/h'] = df['average_speed km/h'].replace([np.inf, -np.inf], np.nan)
-
-
-# Checking if there's NaN or inf in time_diffrence [km/h] - we can not divide by 0
-NaN_speed = df[df['average_speed km/h'].isna()]
-#print(len(NaN_speed[NaN_speed['time_diffrence h'] == 0]))
-
-num_df = df[['average_speed km/h', 'trip_distance km', 'time_diffrence h']]
-
-
-#print(df.isna().sum())
-
-# Rounding pickup time to 1 hour for api weather data
-df['tpep_pickup_datetime'] = df['tpep_pickup_datetime'].dt.round('h')
-
-# Reading weather csv & changing datatype to datetime64[us]
-df_weather = pd.read_csv(r'C:\Users\wikto\OneDrive\Dokumenty\AA_projects\road-optimization\data\weather-data.csv')
-df_weather['Time'] = pd.to_datetime(df_weather['Time']).astype('datetime64[us]')
-
-# Merging df (taxi data) and df_weather (weather data)
-#df_time_weather = pd.merge(df, df_weather, left_on='tpep_pickup_datetime', right_on='Time')
-
-'''
-print(f'DataFrame df_time_weather: {df_time_weather.columns}')
-print(f'DataFrame df kolumny: {df.columns}') '''
-
-# Dropping useless columns
-#df_time_weather = df_time_weather[['Time', 'Temperature', 'Snowfall',
-      #'Showers', 'Rain', 'Visibility', 'Precipitation', 'Wind_speed_10m']]
-
-# Setting index to join two datasets
-df = df.set_index('tpep_pickup_datetime', drop=False)
-df_time_weather = df_weather.set_index('Time', drop=False)
-
-# Marching to one dataset
-df = df.join(df_time_weather, lsuffix='_taxi', rsuffix='_weather')
-df = df.sample(frac=1).reset_index(drop=True)
-df = df.drop(columns=['Visibility'])
-
-# Clear all NaN
-df = df.dropna()
-
-# Changing datatypes to 'category' and numbers for XGBoost
-# Category
-cat_cols = ['PULBorough','DOLBorough']
-for i in cat_cols:
-    df[i] = df[i].astype('category')
-
-# Changing dtypes to int and dropping columns
-df['pickup_hour'] = pd.to_datetime(df['tpep_pickup_datetime']).dt.hour
-df['dropoff_hour'] = pd.to_datetime(df['tpep_dropoff_datetime']).dt.hour
-df = df.drop(columns=['tpep_pickup_datetime', 'tpep_dropoff_datetime', 'Time',
-                      'PUL'])
-
-
-# Checking data types
-print(df.dtypes)
-
-# Saving final dataset to csv
-df.to_parquet('dataset-marged.parquet')
+if __name__ == "__main__":
+    run_pipeline()
