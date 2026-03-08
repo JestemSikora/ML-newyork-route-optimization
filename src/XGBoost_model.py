@@ -63,6 +63,8 @@ def XGBoost_model(xgb_train, xgb_test, X, Y_test):
     
     # To DataFrame
     residuals_test = residuals_series.to_frame()
+    residuals_test['true_value'] = Y_test.values
+    residuals_test['y_predictions'] = y_pred_test
     
     # Top 800 largest residuals
     largest_residuals = residuals_test.nlargest(800, 'residuals in h')
